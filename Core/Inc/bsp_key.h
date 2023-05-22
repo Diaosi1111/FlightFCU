@@ -168,6 +168,7 @@ typedef struct {
 /* 供外部调用的函数声明 */
 void bsp_key_init(void);
 
+uint8_t matrix_key_scan(void);
 
 void bsp_key_enqueue(uint8_t _KeyCode);
 

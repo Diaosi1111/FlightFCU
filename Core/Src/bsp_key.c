@@ -78,18 +78,18 @@ uint8_t key_matrix_row_scan(uint8_t col)
     row_scan          = row_scan | (HAL_GPIO_ReadPin(ROW_3_GPIO_Port, ROW_3_Pin) << 2);
     row_scan          = ~row_scan;
     uint8_t mask      = 0x01;
-    uint8_t key_count = 0;
+    uint8_t key_read = (row_scan & 0x07) << 3 * col;
     for (int i = 0; i < KEY_ROW_COUNT; ++i) {
         if ((row_scan & mask) == 0) {
             bsp_matrix_key_detect(KEY_COL_COUNT * i + col, 0);
         } else {
             bsp_matrix_key_detect(KEY_COL_COUNT * i + col, 1);
             //            key_down_scan |= 1 << (KEY_COL_COUNT * i + col);
-            key_count++;
+            //            key_count++;
         }
         mask <<= 1;
     }
-    return key_count;
+    return key_read;
 }
 
 /***
