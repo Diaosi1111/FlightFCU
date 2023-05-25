@@ -1,4 +1,5 @@
 #include "bsp_key.h"
+#include "tim.h"
 
 #define HARD_KEY_NUM 13
 #define SOFT_KEY_NUM 0
@@ -10,10 +11,12 @@ static key_fifo_t key_fifo; /* 按键FIFO变量,结构体 */
 #define KEY_CLO1_OUT_LOW  HAL_GPIO_WritePin(COL_1_GPIO_Port, COL_1_Pin, GPIO_PIN_RESET)
 #define KEY_CLO2_OUT_LOW  HAL_GPIO_WritePin(COL_2_GPIO_Port, COL_2_Pin, GPIO_PIN_RESET)
 #define KEY_CLO3_OUT_LOW  HAL_GPIO_WritePin(COL_3_GPIO_Port, COL_3_Pin, GPIO_PIN_RESET)
+#define KEY_CLO4_OUT_LOW  HAL_GPIO_WritePin(COL_4_GPIO_Port, COL_4_Pin, GPIO_PIN_RESET)
 
 #define KEY_CLO1_OUT_HIGH HAL_GPIO_WritePin(COL_1_GPIO_Port, COL_1_Pin, GPIO_PIN_SET)
 #define KEY_CLO2_OUT_HIGH HAL_GPIO_WritePin(COL_2_GPIO_Port, COL_2_Pin, GPIO_PIN_SET)
 #define KEY_CLO3_OUT_HIGH HAL_GPIO_WritePin(COL_3_GPIO_Port, COL_3_Pin, GPIO_PIN_SET)
+#define KEY_CLO4_OUT_HIGH HAL_GPIO_WritePin(COL_4_GPIO_Port, COL_4_Pin, GPIO_PIN_SET)
 
 #define KEY_COL_COUNT     4
 #define KEY_ROW_COUNT     3
@@ -73,11 +76,11 @@ uint8_t key_matrix_row_scan(uint8_t col)
 {
     // 读出行扫描状态
     uint8_t row_scan;
-    row_scan          = HAL_GPIO_ReadPin(ROW_1_GPIO_Port, ROW_1_Pin);
-    row_scan          = row_scan | (HAL_GPIO_ReadPin(ROW_2_GPIO_Port, ROW_2_Pin) << 1);
-    row_scan          = row_scan | (HAL_GPIO_ReadPin(ROW_3_GPIO_Port, ROW_3_Pin) << 2);
-    row_scan          = ~row_scan;
-    uint8_t mask      = 0x01;
+    row_scan = HAL_GPIO_ReadPin(ROW_1_GPIO_Port, ROW_1_Pin);
+    row_scan = row_scan | (HAL_GPIO_ReadPin(ROW_2_GPIO_Port, ROW_2_Pin) << 1);
+    row_scan = row_scan | (HAL_GPIO_ReadPin(ROW_3_GPIO_Port, ROW_3_Pin) << 2);
+    //    row_scan         = ~row_scan;
+    uint8_t mask     = 0x01;
     uint8_t key_read = (row_scan & 0x07) << 3 * col;
     for (int i = 0; i < KEY_ROW_COUNT; ++i) {
         if ((row_scan & mask) == 0) {
@@ -101,19 +104,27 @@ uint8_t matrix_key_scan(void)
 {
     uint8_t key_count = 0; // 1-16对应的按键数
 
-    KEY_CLO1_OUT_LOW;
-    key_count += key_matrix_row_scan(1);
     KEY_CLO1_OUT_HIGH;
+    delay_us(5);
+    key_count += key_matrix_row_scan(1);
+    KEY_CLO1_OUT_LOW;
 
-    KEY_CLO2_OUT_LOW;
-    key_count += key_matrix_row_scan(2);
     KEY_CLO2_OUT_HIGH;
+    delay_us(5);
+    key_count += key_matrix_row_scan(2);
+    KEY_CLO2_OUT_LOW;
 
-    KEY_CLO3_OUT_LOW;
-    key_count += key_matrix_row_scan(3);
     KEY_CLO3_OUT_HIGH;
+    delay_us(5);
+    key_count += key_matrix_row_scan(3);
+    KEY_CLO3_OUT_LOW;
 
-    bsp_matrix_key_detect(0, HAL_GPIO_ReadPin(SPD_MACH_GPIO_Port, SPD_MACH_Pin));
+    KEY_CLO4_OUT_HIGH;
+    delay_us(5);
+    key_count += key_matrix_row_scan(4);
+    KEY_CLO4_OUT_LOW;
+
+    bsp_matrix_key_detect(0, HAL_GPIO_ReadPin(SPD_MACH_GPIO_Port, SPD_MACH_Pin) == GPIO_PIN_RESET);
 
     return key_count;
 }

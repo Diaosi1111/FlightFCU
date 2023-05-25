@@ -22,6 +22,8 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include "bsp_key.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,7 +43,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-static uint8_t alt_flag, alt_cw1, alt_cw2;
 
 /* USER CODE END PV */
 
@@ -57,8 +58,8 @@ static uint8_t alt_flag, alt_cw1, alt_cw2;
 
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
-extern TIM_HandleTypeDef htim4;
-
+extern DMA_HandleTypeDef hdma_i2c1_tx;
+extern DMA_HandleTypeDef hdma_i2c2_tx;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -86,7 +87,7 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+    printf("HardFault_Handler\n");
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -185,9 +186,13 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-
+    static uint8_t key_scan_count;
+    if (key_scan_count++ >= 10) {
+        key_scan_count = 0;
+        matrix_key_scan();
+    }
   /* USER CODE END SysTick_IRQn 0 */
-
+  HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
 
   /* USER CODE END SysTick_IRQn 1 */
@@ -211,25 +216,6 @@ void EXTI2_IRQHandler(void)
   HAL_GPIO_EXTI_IRQHandler(ALT_A_Pin);
   /* USER CODE BEGIN EXTI2_IRQn 1 */
 
-    // 只要处理一个脚的外部中断--上升沿&下降沿
-    GPIO_PinState alv = HAL_GPIO_ReadPin(ALT_A_GPIO_Port, ALT_A_Pin);
-    GPIO_PinState blv = HAL_GPIO_ReadPin(ALT_B_GPIO_Port, ALT_B_Pin);
-    extern uint32_t usb_send_buf;
-    if (alt_flag == 0 && alv == GPIO_PIN_RESET) {
-        alt_cw1  = blv;
-        alt_flag = 1;
-    }
-    if (alt_flag && alv) {
-        alt_cw2 = !blv; // 取反是因为 alv,blv必然异步，一高一低。
-        if (alt_cw1 && alt_cw2) {
-            usb_send_buf |= 1 << ALT_A_SFB;
-        }
-        if (alt_cw1 == 0 && alt_cw2 == 0) {
-            usb_send_buf |= 1 << ALT_B_SFB;
-        }
-        alt_flag = 0;
-    }
-
   /* USER CODE END EXTI2_IRQn 1 */
 }
 
@@ -245,6 +231,34 @@ void EXTI4_IRQHandler(void)
   /* USER CODE BEGIN EXTI4_IRQn 1 */
 
   /* USER CODE END EXTI4_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 channel4 global interrupt.
+  */
+void DMA1_Channel4_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel4_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel4_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_i2c2_tx);
+  /* USER CODE BEGIN DMA1_Channel4_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel4_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 channel6 global interrupt.
+  */
+void DMA1_Channel6_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel6_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel6_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_i2c1_tx);
+  /* USER CODE BEGIN DMA1_Channel6_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel6_IRQn 1 */
 }
 
 /**
@@ -274,20 +288,6 @@ void EXTI9_5_IRQHandler(void)
   /* USER CODE BEGIN EXTI9_5_IRQn 1 */
 
   /* USER CODE END EXTI9_5_IRQn 1 */
-}
-
-/**
-  * @brief This function handles TIM4 global interrupt.
-  */
-void TIM4_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM4_IRQn 0 */
-
-  /* USER CODE END TIM4_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim4);
-  /* USER CODE BEGIN TIM4_IRQn 1 */
-
-  /* USER CODE END TIM4_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

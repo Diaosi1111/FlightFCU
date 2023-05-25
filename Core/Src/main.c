@@ -18,9 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
+#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -40,7 +42,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SPD_H_POS             0
+#define HDG_H_POS             52
 
+#define ALT_H_POS             0
+#define VS_H_POS              72
+
+#define KEY_DEBUG_PRINTF(...) printf(__VA_ARGS__)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -130,13 +138,13 @@ typedef struct FCU_Panel_State {
     };
     float spd_selected;
     uint16_t hdg_selected;
-    int16_t fpa_selected;
+    int8_t fpa_selected;
+    int8_t vs_selected;
     uint16_t alt_selected;
-    int16_t vs_selected;
 } panel_state_t;
 
-panel_state_t fcu_state;
-uint8_t vs_flag, vs_cw1, vs_cw2;
+panel_state_t fcu_state = {0};
+
 char display_str_buf[6];
 void panel_led_update(panel_state_t *panel)
 {
@@ -154,14 +162,74 @@ void panel_led_update(panel_state_t *panel)
  */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+    // ec11 interrupt variable
+    static uint8_t spd_flag, spd_cw1, spd_cw2;
+    static uint8_t hdg_flag, hdg_cw1, hdg_cw2;
+    static uint8_t alt_flag, alt_cw1, alt_cw2;
+    static uint8_t vs_flag, vs_cw1, vs_cw2;
+    static uint8_t alv, blv;
     /* Prevent unused argument(s) compilation warning */
     /* NOTE: This function Should not be modified, when the callback is needed,
              the HAL_GPIO_EXTI_Callback could be implemented in the user file
      */
-    if (GPIO_Pin == VS_A_Pin) {
-        uint8_t alv = HAL_GPIO_ReadPin(VS_A_GPIO_Port, VS_A_Pin);
-        uint8_t blv = HAL_GPIO_ReadPin(VS_B_GPIO_Port, VS_B_Pin);
-        printf("alv:%d blv:%d\n", alv, blv);
+    if (GPIO_Pin == SPD_A_Pin) {
+        alv = HAL_GPIO_ReadPin(SPD_A_GPIO_Port, SPD_A_Pin);
+        blv = HAL_GPIO_ReadPin(SPD_B_GPIO_Port, SPD_B_Pin);
+        if (spd_flag == 0 && alv == 0) {
+            spd_cw1  = blv;
+            spd_flag = 1;
+        }
+        if (spd_flag && alv) {
+            spd_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
+            if (spd_cw1 && spd_cw2) {
+                //                usb_send_buf |= 1 << ALT_A_SFB;
+                fcu_state.spd_selected += 1;
+            }
+            if (spd_cw1 == 0 && spd_cw2 == 0) {
+                //                usb_send_buf |= 1 << ALT_B_SFB;
+                fcu_state.spd_selected -= 1;
+            }
+            spd_flag = 0;
+        }
+    } else if (GPIO_Pin == HDG_A_Pin) {
+        alv = HAL_GPIO_ReadPin(HDG_A_GPIO_Port, HDG_A_Pin);
+        blv = HAL_GPIO_ReadPin(HDG_B_GPIO_Port, HDG_B_Pin);
+        //        printf("alv:%d blv:%d\n", alv, blv);
+        if (hdg_flag == 0 && alv == 0) {
+            hdg_cw1  = blv;
+            hdg_flag = 1;
+        }
+        if (hdg_flag && alv) {
+            hdg_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
+            if (hdg_cw1 && hdg_cw2) {
+                fcu_state.hdg_selected += 1;
+            }
+            if (hdg_cw1 == 0 && hdg_cw2 == 0) {
+                fcu_state.hdg_selected -= 1;
+            }
+            hdg_flag = 0;
+        }
+    } else if (GPIO_Pin == ALT_A_Pin) {
+        alv = HAL_GPIO_ReadPin(ALT_A_GPIO_Port, ALT_A_Pin);
+        blv = HAL_GPIO_ReadPin(ALT_B_GPIO_Port, ALT_B_Pin);
+        if (alt_flag == 0 && alv == 0) {
+            alt_cw1  = blv;
+            alt_flag = 1;
+        }
+        if (alt_flag && alv) {
+            alt_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
+            if (alt_cw1 && alt_cw2) {
+                fcu_state.alt_selected += fcu_state.alt_increment == 0 ? 100 : 1000;
+            }
+            if (alt_cw1 == 0 && alt_cw2 == 0) {
+                fcu_state.alt_selected -= fcu_state.alt_increment == 0 ? 100 : 1000;
+            }
+            alt_flag = 0;
+        }
+    } else if (GPIO_Pin == VS_A_Pin) {
+        alv = HAL_GPIO_ReadPin(VS_A_GPIO_Port, VS_A_Pin);
+        blv = HAL_GPIO_ReadPin(VS_B_GPIO_Port, VS_B_Pin);
+        //        printf("alv:%d blv:%d\n", alv, blv);
         if (vs_flag == 0 && alv == 0) {
             vs_cw1  = blv;
             vs_flag = 1;
@@ -170,11 +238,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
             vs_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (vs_cw1 && vs_cw2) {
                 //                usb_send_buf |= 1 << ALT_A_SFB;
-                fcu_state.vs_selected += 100;
+                fcu_state.vs_selected += 1;
             }
             if (vs_cw1 == 0 && vs_cw2 == 0) {
                 //                usb_send_buf |= 1 << ALT_B_SFB;
-                fcu_state.vs_selected -= 100;
+                fcu_state.vs_selected -= 1;
             }
             vs_flag = 0;
         }
@@ -183,157 +251,349 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
-    /* USER CODE BEGIN 1 */
+  /* USER CODE BEGIN 1 */
 
-    /* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-    /* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-    HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-    /* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-    /* USER CODE END Init */
+  /* USER CODE END Init */
 
-    /* Configure the system clock */
-    SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-    /* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-    /* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-    /* Initialize all configured peripherals */
-    MX_GPIO_Init();
-    MX_I2C1_Init();
-    MX_I2C2_Init();
-    MX_USART1_UART_Init();
-    MX_TIM3_Init();
-    /* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_I2C1_Init();
+  MX_I2C2_Init();
+  MX_USART1_UART_Init();
+  MX_TIM3_Init();
+  MX_USB_DEVICE_Init();
+  /* USER CODE BEGIN 2 */
+    /*------------ 初始化 ---------------*/
+    bsp_key_init();
 
     u8g2_t screen_left;
     u8g2_t screen_right;
     u8g2_init_hi2c2(&screen_left);
     u8g2_init_hi2c1(&screen_right);
 
-    /* USER CODE END 2 */
+    fcu_state.trk_fpa_mode = 1;
+    fcu_state.spd_dot      = 1;
+    fcu_state.hdg_dot      = 1;
+  /* USER CODE END 2 */
 
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
     while (1) {
-        /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-        /* USER CODE BEGIN 3 */
-        //    HAL_GPIO_WritePin(ATHR_LED_GPIO_Port, ATHR_LED_Pin, panel->ap_throttle_active);
-        u8g2_ClearBuffer(&screen_left);
-        //        u8g2_ClearDisplay(&screen_left);
-
-        printf("2s\n");
-#define SPD_H_POS 0
-#define HDG_H_POS 44
-
+    /* USER CODE BEGIN 3 */
+        //        printf("2s\n");
         HAL_GPIO_TogglePin(ATHR_LED_GPIO_Port, ATHR_LED_Pin);
+        /* ----------------------- 按键扫描 ------------------------- */
+        //        matrix_key_scan();
+        KEY_ENUM key = bsp_key_dequeue();
+        while (key != KEY_NONE) {
+            switch (key) {
+                case KEY_SPD_MACH_DOWN:
+                    usb_send_buf |= 1 << SPD_MACH_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_SPD_MACH_DOWN\n");
+                    break;
+                case KEY_SPD_MACH_UP:
+                    KEY_DEBUG_PRINTF("KEY_SPD_MACH_UP\n");
+                    break;
+                case KEY_SPD_MACH_LONG:
+                    KEY_DEBUG_PRINTF("KEY_SPD_MACH_LONG\n");
+                    break;
+
+                case KEY_SPD_DOWN:
+                    usb_send_buf |= 1 << SPD_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_SPD_DOWN\n");
+                    break;
+                case KEY_SPD_UP:
+                    KEY_DEBUG_PRINTF("KEY_SPD_UP\n");
+                    break;
+                case KEY_SPD_LONG:
+                    usb_send_buf |= 1 << SPD_PULL_SFB;
+                    KEY_DEBUG_PRINTF("KEY_SPD_LONG\n");
+                    break;
+
+                case KEY_TRK_FPA_DOWN:
+                    usb_send_buf |= 1 << TRK_FPA_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_TRK_FPA_DOWN\n");
+                    break;
+                case KEY_TRK_FPA_UP:
+                    KEY_DEBUG_PRINTF("KEY_TRK_FPA_UP\n");
+                    break;
+                case KEY_TRK_FPA_LONG:
+                    KEY_DEBUG_PRINTF("KEY_TRK_FPA_LONG\n");
+                    break;
+
+                case KEY_AP2_DOWN:
+                    usb_send_buf |= 1 << AP2_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_AP2_DOWN\n");
+                    break;
+                case KEY_AP2_UP:
+                    KEY_DEBUG_PRINTF("KEY_AP2_UP\n");
+                    break;
+                case KEY_AP2_LONG:
+                    KEY_DEBUG_PRINTF("KEY_AP2_LONG\n");
+                    break;
+
+                case KEY_METRIC_DOWN:
+                    usb_send_buf |= 1 << METRIC_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_METRIC_DOWN\n");
+                    break;
+                case KEY_METRIC_UP:
+                    KEY_DEBUG_PRINTF("KEY_METRIC_UP\n");
+                    break;
+                case KEY_METRIC_LONG:
+                    KEY_DEBUG_PRINTF("KEY_METRIC_LONG\n");
+                    break;
+
+                case KEY_HDG_DOWN:
+                    usb_send_buf |= 1 << HDG_PULL_SFB;
+                    KEY_DEBUG_PRINTF("KEY_HDG_DOWN\n");
+                    break;
+                case KEY_HDG_UP:
+                    KEY_DEBUG_PRINTF("KEY_HDG_UP\n");
+                    break;
+                case KEY_HDG_LONG:
+                    usb_send_buf |= 1 << HDG_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_HDG_LONG\n");
+                    break;
+
+                case KEY_AP1_DOWN:
+                    usb_send_buf |= 1 << AP1_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_AP1_DOWN\n");
+                    break;
+                case KEY_AP1_UP:
+                    KEY_DEBUG_PRINTF("KEY_AP1_UP\n");
+                    break;
+                case KEY_AP1_LONG:
+                    KEY_DEBUG_PRINTF("KEY_AP1_LONG\n");
+                    break;
+
+                case KEY_ALT_DOWN:
+                    usb_send_buf |= 1 << ALT_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_ALT_DOWN\n");
+                    break;
+                case KEY_ALT_UP:
+                    KEY_DEBUG_PRINTF("KEY_ALT_UP\n");
+                    break;
+                case KEY_ALT_LONG:
+                    usb_send_buf |= 1 << ALT_PULL_SFB;
+                    KEY_DEBUG_PRINTF("KEY_ALT_LONG\n");
+                    break;
+
+                case KEY_VS_DOWN:
+                    usb_send_buf |= 1 << VS_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_VS_DOWN\n");
+                    break;
+                case KEY_VS_UP:
+                    KEY_DEBUG_PRINTF("KEY_VS_UP\n");
+                    break;
+                case KEY_VS_LONG:
+                    usb_send_buf |= 1 << VS_PULL_SFB;
+                    KEY_DEBUG_PRINTF("KEY_VS_LONG\n");
+                    break;
+
+                case KEY_LOC_DOWN:
+                    usb_send_buf |= 1 << LOC_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_LOC_DOWN\n");
+                    break;
+                case KEY_LOC_UP:
+                    KEY_DEBUG_PRINTF("KEY_LOC_UP\n");
+                    break;
+                case KEY_LOC_LONG:
+                    KEY_DEBUG_PRINTF("KEY_LOC_LONG\n");
+                    break;
+
+                case KEY_ATHR_DOWN:
+                    usb_send_buf |= 1 << ATHR_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_ATHR_DOWN\n");
+                    break;
+                case KEY_ATHR_UP:
+                    KEY_DEBUG_PRINTF("KEY_ATHR_UP\n");
+                    break;
+                case KEY_ATHR_LONG:
+                    KEY_DEBUG_PRINTF("KEY_ATHR_LONG\n");
+                    break;
+
+                case KEY_EXPED_DOWN:
+                    usb_send_buf |= 1 << EXPED_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_EXPED_DOWN\n");
+                    break;
+                case KEY_EXPED_UP:
+                    KEY_DEBUG_PRINTF("KEY_EXPED_UP\n");
+                    break;
+                case KEY_EXPED_LONG:
+                    KEY_DEBUG_PRINTF("KEY_EXPED_LONG\n");
+                    break;
+
+                case KEY_APPR_DOWN:
+                    usb_send_buf |= 1 << APPR_PUSH_SFB;
+                    KEY_DEBUG_PRINTF("KEY_APPR_DOWN\n");
+                    break;
+                case KEY_APPR_UP:
+                    KEY_DEBUG_PRINTF("KEY_APPR_UP\n");
+                    break;
+                case KEY_APPR_LONG:
+                    KEY_DEBUG_PRINTF("KEY_APPR_LONG\n");
+                    break;
+                default:
+                    break;
+            }
+            key = bsp_key_dequeue();
+        }
+        /* --------------------- USB 数据发送 ----------------------- */
+
+        /* --------------------- USB 数据接收 ----------------------- */
+
+        /* ----------------------- LED刷新 ------------------------- */
+        //        panel_led_update(&fcu_state);
+//        fcu_state.trk_fpa_mode=1-fcu_state.trk_fpa_mode;
+        /* ----------------------- 显示刷新 ------------------------- */
+        /* Left Screen */
+        u8g2_ClearBuffer(&screen_left);
+
         u8g2_SetFont(&screen_left, digital7_24);
-        u8g2_DrawStr(&screen_left, SPD_H_POS, 32, "156");
-        u8g2_DrawStr(&screen_left, HDG_H_POS, 32, "---");
-        //        u8g2_DrawStr(&screen_left, 80, 32, "---");
-        u8g2_DrawFilledEllipse(&screen_left, 88, 23, 5, 5, U8G2_DRAW_ALL);
+        /* SPD */
+        if (fcu_state.spd_dashes) {
+            u8g2_DrawStr(&screen_left, SPD_H_POS, 32, "---");
+        } else {
+            if (fcu_state.spd_mach_mode) { // mach
+                sprintf(display_str_buf, "%0.2f", fcu_state.spd_selected);
+            } else { // knot
+                sprintf(display_str_buf, "%03d", (uint8_t)fcu_state.spd_selected);
+            }
+            u8g2_DrawStr(&screen_left, SPD_H_POS, 32, display_str_buf);
+        }
+        if (fcu_state.spd_dot) { u8g2_DrawFilledEllipse(&screen_left, SPD_H_POS + 40, 23, 4, 4, U8G2_DRAW_ALL); }
+        /* HDG */
+        if (fcu_state.hdg_dashes) {
+            u8g2_DrawStr(&screen_left, HDG_H_POS, 32, "---");
+        } else {
+            sprintf(display_str_buf, "%03d", (uint8_t)fcu_state.hdg_selected);
+            u8g2_DrawStr(&screen_left, HDG_H_POS, 32, display_str_buf);
+        }
+        if (fcu_state.hdg_dot) {
+            u8g2_DrawFilledEllipse(&screen_left, HDG_H_POS + 42, 23, 4, 4, U8G2_DRAW_ALL);
+        }
 
         u8g2_SetFont(&screen_left, u8g2_font_finderskeepers_tr);
         u8g2_DrawStr(&screen_left, SPD_H_POS, 7, "SPD");
-        u8g2_DrawStr(&screen_left, HDG_H_POS, 7, "HDG");
-        u8g2_DrawStr(&screen_left, 80, 7, "LAT");
-        u8g2_DrawStr(&screen_left, 110, 9, "HDG");
-        u8g2_DrawStr(&screen_left, 110, 26, "V/S");
+        if (fcu_state.trk_fpa_mode) {
+            u8g2_DrawStr(&screen_left, HDG_H_POS + 14, 7, "TRK");
+            u8g2_DrawStr(&screen_left, 110, 9, "TRK");
+            u8g2_DrawStr(&screen_left, 110, 26, "FPA");
+        } else {
+            u8g2_DrawStr(&screen_left, HDG_H_POS, 7, "HDG");
+            u8g2_DrawStr(&screen_left, 110, 9, "HDG");
+            u8g2_DrawStr(&screen_left, 110, 26, "V/S");
+        }
+        u8g2_DrawStr(&screen_left, HDG_H_POS + 34, 7, "LAT");
 
         u8g2_SendBuffer(&screen_left);
-
+        /* ------- Right Screen --------- */
         u8g2_ClearBuffer(&screen_right);
-        // #define ALT_H_POS 20
-        // #define VS_H_POS  84
-        //         u8g2_SetFont(&screen_right, digital7_20);
-        //         u8g2_DrawStr(&screen_right, ALT_H_POS, 32, "05000");
-        //         u8g2_DrawStr(&screen_right, VS_H_POS, 32, "88888");
-        //         u8g2_DrawFilledEllipse(&screen_right, 72, 24, 5, 5, U8G2_DRAW_ALL);
-        //
-        //         u8g2_SetFont(&screen_right, u8g2_font_finderskeepers_tr);
-        //         u8g2_DrawStr(&screen_right, ALT_H_POS + 16, 7, "ALT");
-        //         u8g2_DrawStr(&screen_right, ALT_H_POS + 38, 7, "LVL/CH");
-        //         u8g2_DrawStr(&screen_right, VS_H_POS + 20, 7, "V/S");
-        //         u8g2_DrawStr(&screen_right, 0, 20, "V/S");
 
-#define ALT_H_POS 0
-#define VS_H_POS  72
         u8g2_SetFont(&screen_right, digital7_24);
-        u8g2_DrawStr(&screen_right, ALT_H_POS, 32, "05000");
-
-        sprintf(display_str_buf, "%05d", fcu_state.vs_selected);
-        u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
-
-        u8g2_DrawFilledEllipse(&screen_right, 63, 23, 5, 5, U8G2_DRAW_ALL);
+        sprintf(display_str_buf, "%05d", fcu_state.alt_selected);
+        u8g2_DrawStr(&screen_right, ALT_H_POS, 32, display_str_buf);
+        if (fcu_state.vs_dashes) {
+            u8g2_DrawStr(&screen_right, VS_H_POS, 32, "-----");
+        } else {
+            if (fcu_state.trk_fpa_mode) {                                          // FPA
+                sprintf(display_str_buf, "%+1.1f", fcu_state.fpa_selected / 10.0); // 无需补零
+                u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
+            } else {                                                      // V/S
+                sprintf(display_str_buf, "%+03d", fcu_state.vs_selected); // 无需补零
+                u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
+                u8g2_SetFont(&screen_right, digital7_18);
+                u8g2_DrawStr(&screen_right, VS_H_POS + 34, 32, "00");
+            }
+        }
+        if (fcu_state.alt_dot) { u8g2_DrawFilledEllipse(&screen_right, 63, 23, 5, 5, U8G2_DRAW_ALL); }
 
         u8g2_SetFont(&screen_right, u8g2_font_finderskeepers_tr);
         u8g2_DrawStr(&screen_right, ALT_H_POS + 18, 7, "ALT");
         u8g2_DrawStr(&screen_right, ALT_H_POS + 48, 7, "LVL/CH");
-        u8g2_DrawStr(&screen_right, VS_H_POS + 24, 7, "V/S");
+        if (fcu_state.trk_fpa_mode) {
+            u8g2_DrawStr(&screen_right, VS_H_POS + 40, 7, "FPA");
+        } else {
+            u8g2_DrawStr(&screen_right, VS_H_POS + 24, 7, "V/S");
+        }
         u8g2_DrawVLine(&screen_right, ALT_H_POS + 36, 3, 4);
         u8g2_DrawHLine(&screen_right, ALT_H_POS + 36, 3, 10);
         u8g2_DrawVLine(&screen_right, VS_H_POS + 20, 3, 4);
         u8g2_DrawHLine(&screen_right, VS_H_POS + 10, 3, 10);
 
         u8g2_SendBuffer(&screen_right);
-
-//        HAL_Delay(2000);
-        //        u8g2_FirstPage(&screen_left);
-        //        do {
-        //            draw(&screen_left);
-        //
-        //            u8g2DrawTest(&screen_left);
-        //        } while (u8g2_NextPage(&screen_left));
-        //        bsp_key_init();
-        //        matrix_key_scan();
     }
-    /* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-    /** Initializes the RCC Oscillators according to the specified parameters
-     * in the RCC_OscInitTypeDef structure.
-     */
-    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_HSI;
-    RCC_OscInitStruct.HSIState            = RCC_HSI_ON;
-    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-    RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource       = RCC_PLLSOURCE_HSI_DIV2;
-    RCC_OscInitStruct.PLL.PLLMUL          = RCC_PLL_MUL16;
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-        Error_Handler();
-    }
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-    /** Initializes the CPU, AHB and APB buses clocks
-     */
-    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
-    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
-        Error_Handler();
-    }
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
+  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
@@ -341,32 +601,32 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
-    /* USER CODE BEGIN Error_Handler_Debug */
+  /* USER CODE BEGIN Error_Handler_Debug */
     /* User can add his own implementation to report the HAL error return state */
     __disable_irq();
     while (1) {
     }
-    /* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef USE_FULL_ASSERT
+#ifdef  USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-    /* USER CODE BEGIN 6 */
+  /* USER CODE BEGIN 6 */
     /* User can add his own implementation to report the file name and line number,
        ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-    /* USER CODE END 6 */
+  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

@@ -64,7 +64,7 @@
 
 #define USBD_VID     2023
 #define USBD_LANGID_STRING     1033
-#define USBD_MANUFACTURER_STRING     "XLDElectrical"
+#define USBD_MANUFACTURER_STRING     "XLD Electric Inc."
 #define USBD_PID_FS     25687
 #define USBD_PRODUCT_STRING_FS     "A32NX FCU Panel"
 #define USBD_CONFIGURATION_STRING_FS     "Custom HID Config"
