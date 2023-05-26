@@ -591,9 +591,6 @@ void SystemClock_Config(void)
  */
 static void MX_NVIC_Init(void)
 {
-    /* USB_HP_CAN1_TX_IRQn interrupt configuration */
-    HAL_NVIC_SetPriority(USB_HP_CAN1_TX_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(USB_HP_CAN1_TX_IRQn);
     /* USB_LP_CAN1_RX0_IRQn interrupt configuration */
     HAL_NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn);

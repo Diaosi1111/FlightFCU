@@ -92,8 +92,6 @@ void HAL_PCD_MspDeInit(PCD_HandleTypeDef *pcdHandle)
         __HAL_RCC_USB_CLK_DISABLE();
 
         /* Peripheral interrupt Deinit*/
-        HAL_NVIC_DisableIRQ(USB_HP_CAN1_TX_IRQn);
-
         HAL_NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
 
         /* USER CODE BEGIN USB_MspDeInit 1 */
@@ -323,7 +321,7 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
     HAL_PCD_RegisterIsoOutIncpltCallback(&hpcd_USB_FS, PCD_ISOOUTIncompleteCallback);
     HAL_PCD_RegisterIsoInIncpltCallback(&hpcd_USB_FS, PCD_ISOINIncompleteCallback);
 #endif /* USE_HAL_PCD_REGISTER_CALLBACKS */
-    /* USER CODE BEGIN EndPoint_Configuration */
+       /* USER CODE BEGIN EndPoint_Configuration */
     HAL_PCDEx_PMAConfig((PCD_HandleTypeDef *)pdev->pData, 0x00, PCD_SNG_BUF, 0x18);
     HAL_PCDEx_PMAConfig((PCD_HandleTypeDef *)pdev->pData, 0x80, PCD_SNG_BUF, 0x58);
     /* USER CODE END EndPoint_Configuration */
