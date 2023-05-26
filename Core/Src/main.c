@@ -22,18 +22,15 @@
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
+#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "hw_config.h"
-#include "usb_lib.h"
-#include "usb_pwr.h"
-
+#include "usbd_customhid.h"
 #include "stdio.h"
 #include "bsp_key.h"
 #include "u8g2.h"
-#include "u8g2_test.h"
 #include "stm32_u8g2.h"
 /* USER CODE END Includes */
 
@@ -98,11 +95,18 @@ unsigned char USB_Received_Count = 0; // USB接收数据计数
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 uint8_t __io_putchar(int ch)
 {
     HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
     return ch;
+}
+extern USBD_HandleTypeDef hUsbDeviceFS;
+
+static int8_t USBD_CUSTOM_HID_SendReport_FS(uint8_t *report, uint16_t len)
+{
+    return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
 }
 
 /* USER CODE END PFP */
@@ -273,15 +277,20 @@ int main(void)
     /* USER CODE END SysInit */
 
     /* Initialize all configured peripherals */
-
     MX_GPIO_Init();
     MX_DMA_Init();
     MX_I2C1_Init();
     MX_I2C2_Init();
     MX_USART1_UART_Init();
     MX_TIM3_Init();
+    MX_USB_DEVICE_Init();
+
+    /* Initialize interrupts */
+    MX_NVIC_Init();
     /* USER CODE BEGIN 2 */
     /*------------ 初始化 ---------------*/
+    *((__IO unsigned *)((0x40005C00L) + 0x54)) = 1; // DP_PUP
+
     bsp_key_init();
 
     u8g2_t screen_left;
@@ -292,16 +301,7 @@ int main(void)
     //    fcu_state.trk_fpa_mode = 1;
     //    fcu_state.spd_dot      = 1;
     //    fcu_state.hdg_dot      = 1;
-    uint8_t usbstatus = 0;
-//    HAL_Delay(1800);
-//    USB_Port_Set(0); // USB先断开
-//    HAL_Delay(700);
-//    USB_Port_Set(1); // USB再次连接
-    Set_System();
-    Set_USBClock();
-    USB_Interrupts_Config();
-    USB_Init();
-//    DP_PUUP = 1;
+
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -469,20 +469,11 @@ int main(void)
             key = bsp_key_dequeue();
         }
         /* --------------------- USB 数据发送 ----------------------- */
-        if (usbstatus != bDeviceState) // USB连接状态发生了改变.
-        {
-            usbstatus = bDeviceState; // 记录新的状态
-            if (usbstatus == CONFIGURED) {
-                printf("USB连接成功\n");
-            } else {
-                printf("USB断开连接\n");
-            }
-        }
 
         /* --------------------- USB 数据接收 ----------------------- */
 
         /* ----------------------- LED刷新 ------------------------- */
-        //        panel_led_update(&fcu_state);
+        panel_led_update(&fcu_state);
         //        fcu_state.trk_fpa_mode=1-fcu_state.trk_fpa_mode;
         /* ----------------------- 显示刷新 ------------------------- */
         //        if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) { // USB 已连接
@@ -575,8 +566,9 @@ int main(void)
  */
 void SystemClock_Config(void)
 {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_OscInitTypeDef RCC_OscInitStruct   = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct   = {0};
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
     /** Initializes the RCC Oscillators according to the specified parameters
      * in the RCC_OscInitTypeDef structure.
@@ -603,14 +595,25 @@ void SystemClock_Config(void)
     if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
         Error_Handler();
     }
-
-    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
-
     PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
     PeriphClkInit.UsbClockSelection    = RCC_USBCLKSOURCE_PLL_DIV1_5;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
         Error_Handler();
     }
+}
+
+/**
+ * @brief NVIC Configuration.
+ * @retval None
+ */
+static void MX_NVIC_Init(void)
+{
+    /* USB_HP_CAN1_TX_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(USB_HP_CAN1_TX_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(USB_HP_CAN1_TX_IRQn);
+    /* USB_LP_CAN1_RX0_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn);
 }
 
 /* USER CODE BEGIN 4 */

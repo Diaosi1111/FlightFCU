@@ -52,8 +52,6 @@ include_directories(${includes})
 
 include_directories(Drivers/u8g2/Inc)
 
-include_directories(Drivers/AIR32_USB-FS-Device_Driver/inc Drivers/AIR32_USB-FS-Device_Config/Inc)
-
 add_definitions(${defines})
 
 file(GLOB_RECURSE SOURCES ${sources})
