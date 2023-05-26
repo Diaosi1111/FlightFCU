@@ -1,85 +1,93 @@
 /**
- ******************************************************************************
- * @file    usb_prop.h
- * @author  MCD Application Team
- * @version V4.0.0
- * @date    21-January-2013
- * @brief   All processing related to Virtual COM Port Demo (Endpoint 0)
- ******************************************************************************
- * @attention
- *
- * <h2><center>&copy; COPYRIGHT 2013 STMicroelectronics</center></h2>
- *
- * Licensed under MCD-ST Liberty SW License Agreement V2, (the "License");
- * You may not use this file except in compliance with the License.
- * You may obtain a copy of the License at:
- *
- *        http://www.st.com/software_license_agreement_liberty_v2
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- ******************************************************************************
- */
+  ******************************************************************************
+  * @file    usb_prop.h
+  * @author  MCD Application Team
+  * @version V4.1.0
+  * @date    26-May-2017
+  * @brief   All processing related to Joystick Mouse demo
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; COPYRIGHT(c) 2017 STMicroelectronics</center></h2>
+  *
+  * Redistribution and use in source and binary forms, with or without modification,
+  * are permitted provided that the following conditions are met:
+  *   1. Redistributions of source code must retain the above copyright notice,
+  *      this list of conditions and the following disclaimer.
+  *   2. Redistributions in binary form must reproduce the above copyright notice,
+  *      this list of conditions and the following disclaimer in the documentation
+  *      and/or other materials provided with the distribution.
+  *   3. Neither the name of STMicroelectronics nor the names of its contributors
+  *      may be used to endorse or promote products derived from this software
+  *      without specific prior written permission.
+  *
+  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+  ******************************************************************************
+  */
+
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __usb_prop_H
-#define __usb_prop_H
+#ifndef __USB_PROP_H
+#define __USB_PROP_H
 
 /* Includes ------------------------------------------------------------------*/
+#include "usb_lib.h"
 /* Exported types ------------------------------------------------------------*/
-typedef struct
+typedef enum _HID_REQUESTS
 {
-    uint32_t bitrate;
-    uint8_t format;
-    uint8_t paritytype;
-    uint8_t datatype;
-} LINE_CODING;
+  GET_REPORT = 1,
+  GET_IDLE,
+  GET_PROTOCOL,
+
+  SET_REPORT = 9,
+  SET_IDLE,
+  SET_PROTOCOL
+} HID_REQUESTS;
 
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
-/* Exported define -----------------------------------------------------------*/
-
-#define Virtual_Com_Port_GetConfiguration NOP_Process
-// #define Virtual_Com_Port_SetConfiguration          NOP_Process
-#define Virtual_Com_Port_GetInterface       NOP_Process
-#define Virtual_Com_Port_SetInterface       NOP_Process
-#define Virtual_Com_Port_GetStatus          NOP_Process
-#define Virtual_Com_Port_ClearFeature       NOP_Process
-#define Virtual_Com_Port_SetEndPointFeature NOP_Process
-#define Virtual_Com_Port_SetDeviceFeature   NOP_Process
-// #define Virtual_Com_Port_SetDeviceAddress          NOP_Process
-
-#define SEND_ENCAPSULATED_COMMAND 0x00
-#define GET_ENCAPSULATED_RESPONSE 0x01
-#define SET_COMM_FEATURE          0x02
-#define GET_COMM_FEATURE          0x03
-#define CLEAR_COMM_FEATURE        0x04
-#define SET_LINE_CODING           0x20
-#define GET_LINE_CODING           0x21
-#define SET_CONTROL_LINE_STATE    0x22
-#define SEND_BREAK                0x23
-
 /* Exported functions ------------------------------------------------------- */
-void Virtual_Com_Port_init(void);
-void Virtual_Com_Port_Reset(void);
-void Virtual_Com_Port_SetConfiguration(void);
-void Virtual_Com_Port_SetDeviceAddress(void);
-void Virtual_Com_Port_Status_In(void);
-void Virtual_Com_Port_Status_Out(void);
-RESULT Virtual_Com_Port_Data_Setup(uint8_t);
-RESULT Virtual_Com_Port_NoData_Setup(uint8_t);
-RESULT Virtual_Com_Port_Get_Interface_Setting(uint8_t Interface, uint8_t AlternateSetting);
-uint8_t *Virtual_Com_Port_GetDeviceDescriptor(uint16_t);
-uint8_t *Virtual_Com_Port_GetConfigDescriptor(uint16_t);
-uint8_t *Virtual_Com_Port_GetStringDescriptor(uint16_t);
+void Joystick_init(void);
+void Joystick_Reset(void);
+void Joystick_SetConfiguration(void);
+void Joystick_SetDeviceAddress (void);
+void Joystick_Status_In (void);
+void Joystick_Status_Out (void);
+RESULT Joystick_Data_Setup(uint8_t);
+RESULT Joystick_NoData_Setup(uint8_t);
+RESULT Joystick_Get_Interface_Setting(uint8_t Interface, uint8_t AlternateSetting);
+uint8_t *Joystick_GetDeviceDescriptor(uint16_t );
+uint8_t *Joystick_GetConfigDescriptor(uint16_t);
+uint8_t *Joystick_GetStringDescriptor(uint16_t);
+RESULT Joystick_SetProtocol(void);
+uint8_t *Joystick_GetProtocolValue(uint16_t Length);
+RESULT Joystick_SetProtocol(void);
+uint8_t *Joystick_GetReportDescriptor(uint16_t Length);
+uint8_t *Joystick_GetHIDDescriptor(uint16_t Length);
 
-uint8_t *Virtual_Com_Port_GetLineCoding(uint16_t Length);
-uint8_t *Virtual_Com_Port_SetLineCoding(uint16_t Length);
+/* Exported define -----------------------------------------------------------*/
+#define Joystick_GetConfiguration          NOP_Process
+//#define Joystick_SetConfiguration          NOP_Process
+#define Joystick_GetInterface              NOP_Process
+#define Joystick_SetInterface              NOP_Process
+#define Joystick_GetStatus                 NOP_Process
+#define Joystick_ClearFeature              NOP_Process
+#define Joystick_SetEndPointFeature        NOP_Process
+#define Joystick_SetDeviceFeature          NOP_Process
+//#define Joystick_SetDeviceAddress          NOP_Process
 
-#endif /* __usb_prop_H */
+#define REPORT_DESCRIPTOR                  0x22
+
+#endif /* __USB_PROP_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

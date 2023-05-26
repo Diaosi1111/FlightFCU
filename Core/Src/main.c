@@ -22,12 +22,14 @@
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
-#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usbd_customhid.h"
+#include "hw_config.h"
+#include "usb_lib.h"
+#include "usb_pwr.h"
+
 #include "stdio.h"
 #include "bsp_key.h"
 #include "u8g2.h"
@@ -103,12 +105,6 @@ uint8_t __io_putchar(int ch)
     return ch;
 }
 
-extern USBD_HandleTypeDef hUsbDeviceFS;
-
-static int8_t USBD_CUSTOM_HID_SendReport_FS(uint8_t *report, uint16_t len)
-{
-    return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
-}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -277,15 +273,13 @@ int main(void)
     /* USER CODE END SysInit */
 
     /* Initialize all configured peripherals */
+
     MX_GPIO_Init();
     MX_DMA_Init();
     MX_I2C1_Init();
     MX_I2C2_Init();
     MX_USART1_UART_Init();
     MX_TIM3_Init();
-#define DP_PUUP *((__IO unsigned *)((0x40005C00L) + 0x54))
-    DP_PUUP = 1;
-    MX_USB_DEVICE_Init();
     /* USER CODE BEGIN 2 */
     /*------------ 初始化 ---------------*/
     bsp_key_init();
@@ -298,6 +292,16 @@ int main(void)
     //    fcu_state.trk_fpa_mode = 1;
     //    fcu_state.spd_dot      = 1;
     //    fcu_state.hdg_dot      = 1;
+    uint8_t usbstatus = 0;
+//    HAL_Delay(1800);
+//    USB_Port_Set(0); // USB先断开
+//    HAL_Delay(700);
+//    USB_Port_Set(1); // USB再次连接
+    Set_System();
+    Set_USBClock();
+    USB_Interrupts_Config();
+    USB_Init();
+//    DP_PUUP = 1;
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -465,6 +469,15 @@ int main(void)
             key = bsp_key_dequeue();
         }
         /* --------------------- USB 数据发送 ----------------------- */
+        if (usbstatus != bDeviceState) // USB连接状态发生了改变.
+        {
+            usbstatus = bDeviceState; // 记录新的状态
+            if (usbstatus == CONFIGURED) {
+                printf("USB连接成功\n");
+            } else {
+                printf("USB断开连接\n");
+            }
+        }
 
         /* --------------------- USB 数据接收 ----------------------- */
 
@@ -562,9 +575,8 @@ int main(void)
  */
 void SystemClock_Config(void)
 {
-    RCC_OscInitTypeDef RCC_OscInitStruct   = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct   = {0};
-    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
     /** Initializes the RCC Oscillators according to the specified parameters
      * in the RCC_OscInitTypeDef structure.
@@ -586,11 +598,14 @@ void SystemClock_Config(void)
     RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
     RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
     RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
     if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
         Error_Handler();
     }
+
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+
     PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
     PeriphClkInit.UsbClockSelection    = RCC_USBCLKSOURCE_PLL_DIV1_5;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
@@ -609,6 +624,7 @@ void SystemClock_Config(void)
 void Error_Handler(void)
 {
     /* USER CODE BEGIN Error_Handler_Debug */
+    printf("Error Handler!\n");
     /* User can add his own implementation to report the HAL error return state */
     __disable_irq();
     while (1) {

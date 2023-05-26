@@ -73,13 +73,14 @@
 
 #define PGout(n)               BIT_ADDR(GPIOG_ODR_Addr, n) // ���
 #define PGin(n)                BIT_ADDR(GPIOG_IDR_Addr, n) // ����
+#define ID1                    (0x1FFFF7E8)
+#define ID2                    (0x1FFFF7EC)
+#define ID3                    (0x1FFFF7F0)
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 /* Uncomment the line corresponding to the STMicroelectronics evaluation board
    used to run the example */
-
-#define USE_STM3210E_EVAL // STM32F10Xʹ�õİ汾
 
 #endif /* __PLATFORM_CONFIG_H */
 

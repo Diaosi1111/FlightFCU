@@ -1,41 +1,73 @@
+/**
+ ******************************************************************************
+ * @file    hw_config.h
+ * @author  MCD Application Team
+ * @version V4.1.0
+ * @date    26-May-2017
+ * @brief   Hardware Configuration & Setup
+ ******************************************************************************
+ * @attention
+ *
+ * <h2><center>&copy; COPYRIGHT(c) 2017 STMicroelectronics</center></h2>
+ *
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
+ *   1. Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright notice,
+ *      this list of conditions and the following disclaimer in the documentation
+ *      and/or other materials provided with the distribution.
+ *   3. Neither the name of STMicroelectronics nor the names of its contributors
+ *      may be used to endorse or promote products derived from this software
+ *      without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ ******************************************************************************
+ */
+
+/* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __HW_CONFIG_H
 #define __HW_CONFIG_H
 
+/* Includes ------------------------------------------------------------------*/
 #include "platform_config.h"
-#include "usb_type.h" 
+#include "usb_type.h"
+#include "usb_lib.h"
+#include "usb_desc.h"
+#include "usb_pwr.h"
+#include "usb_istr.h"
+/* Exported types ------------------------------------------------------------*/
+/* Exported constants --------------------------------------------------------*/
+/* Exported macro ------------------------------------------------------------*/
+/* Exported define -----------------------------------------------------------*/
+#define CURSOR_STEP 5
+#define DOWN        2
+#define LEFT        3
+#define RIGHT       4
+#define UP          5
 
-
- 
-#define USB_USART_TXFIFO_SIZE   1024	//USB虚拟串口发送FIFO大小		
-#define USB_USART_REC_LEN	 	200		//USB串口接收缓冲区最大字节数
-
-//定义一个USB USART FIFO结构体
-typedef struct  
-{										    
-	u8  buffer[USB_USART_TXFIFO_SIZE];	//buffer
-	vu16 writeptr;						//写指针
-	vu16 readptr;						//读指针
-}_usb_usart_fifo; 
-extern _usb_usart_fifo uu_txfifo;		//USB串口发送FIFO
-
-extern u8  USB_USART_RX_BUF[USB_USART_REC_LEN]; //接收缓冲,最大USB_USART_REC_LEN个字节.末字节为换行符 
-extern u16 USB_USART_RX_STA;   					//接收状态标记	
- 
-//USB通用代码函数声明
+/* Exported functions ------------------------------------------------------- */
+void Set_System(void);
 void Set_USBClock(void);
+void GPIO_AINConfig(void);
 void Enter_LowPowerMode(void);
 void Leave_LowPowerMode(void);
 void USB_Interrupts_Config(void);
-void USB_Cable_Config (FunctionalState NewState);
-void USB_Port_Set(u8 enable);
-void IntToUnicode (u32 value,u8 *pbuf,u8 len);
+void USB_Cable_Config(FunctionalState NewState);
+void Keyboard_Send(void);
 void Get_SerialNum(void);
+void Joy_Emul(void);
 
-//不同USB功能添加的函数声明 
-bool USART_Config(void);
-void USB_To_USART_Send_Data(uint8_t* data_buffer, uint8_t Nb_bytes);
-void USART_To_USB_Send_Data(void);
-void USB_USART_SendData(u8 data);
-void usb_printf(char* fmt,...); 
+#endif /*__HW_CONFIG_H*/
 
-#endif  
+/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
