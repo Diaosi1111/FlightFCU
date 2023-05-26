@@ -115,6 +115,7 @@ static inline int8_t USBD_CUSTOM_HID_SendReport_FS(uint8_t *report, uint16_t len
 /* USER CODE BEGIN 0 */
 /* 使用状态机来完成数据维护 */
 panel_state_t fcu_state = {0};
+uint8_t fcu_update      = 1;
 
 char display_str_buf[6];
 void panel_led_update(panel_state_t *panel)
@@ -154,11 +155,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
             spd_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (spd_cw1 && spd_cw2) {
                 usb_send_buf |= 1 << SPD_A_SFB;
-                fcu_state.spd_selected += 1;
+                //                fcu_state.spd_selected += 1;
             }
             if (spd_cw1 == 0 && spd_cw2 == 0) {
                 usb_send_buf |= 1 << SPD_B_SFB;
-                fcu_state.spd_selected -= 1;
+                //                fcu_state.spd_selected -= 1;
             }
             spd_flag = 0;
         }
@@ -173,11 +174,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
             hdg_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (hdg_cw1 && hdg_cw2) {
                 usb_send_buf |= 1 << HDG_A_SFB;
-                fcu_state.hdg_selected += 1;
+                //                fcu_state.hdg_selected += 1;
             }
             if (hdg_cw1 == 0 && hdg_cw2 == 0) {
                 usb_send_buf |= 1 << HDG_B_SFB;
-                fcu_state.hdg_selected -= 1;
+                //                fcu_state.hdg_selected -= 1;
             }
             hdg_flag = 0;
         }
@@ -192,11 +193,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
             alt_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (alt_cw1 && alt_cw2) {
                 usb_send_buf |= 1 << ALT_A_SFB;
-                fcu_state.alt_selected += fcu_state.alt_increment == 0 ? 1 : 1000;
+                //                fcu_state.alt_selected += fcu_state.alt_increment == 0 ? 1 : 1000;
             }
             if (alt_cw1 == 0 && alt_cw2 == 0) {
                 usb_send_buf |= 1 << ALT_B_SFB;
-                fcu_state.alt_selected -= fcu_state.alt_increment == 0 ? 1 : 1000;
+                //                fcu_state.alt_selected -= fcu_state.alt_increment == 0 ? 1 : 1000;
             }
             alt_flag = 0;
         }
@@ -212,11 +213,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
             vs_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (vs_cw1 && vs_cw2) {
                 usb_send_buf |= 1 << VS_A_SFB;
-                fcu_state.vs_selected += 1;
+                //                fcu_state.vs_selected += 1;
             }
             if (vs_cw1 == 0 && vs_cw2 == 0) {
                 usb_send_buf |= 1 << VS_B_SFB;
-                fcu_state.vs_selected -= 1;
+                //                fcu_state.vs_selected -= 1;
             }
             vs_flag = 0;
         }
@@ -448,10 +449,12 @@ int main(void)
         usb_send_buf = 0;
         /* --------------------- USB 数据接收 ----------------------- */
 
-        /* ----------------------- LED刷新 ------------------------- */
-        panel_led_update(&fcu_state);
-        /* ----------------------- 显示刷新 ------------------------- */
         if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) { // USB 已连接
+            if (fcu_update == 0) continue;
+            fcu_update = 0;
+            /* ----------------------- LED刷新 ------------------------- */
+            panel_led_update(&fcu_state);
+            /* ----------------------- 显示刷新 ------------------------- */
             /* Left Screen */
             u8g2_ClearBuffer(&screen_left);
 
@@ -461,9 +464,9 @@ int main(void)
                 u8g2_DrawStr(&screen_left, SPD_H_POS, 32, "---");
             } else {
                 if (fcu_state.spd_mach_mode) { // mach
-                    sprintf(display_str_buf, "%0.2f", fcu_state.spd_selected);
+                    sprintf(display_str_buf, ".%02d", (uint8_t)(fcu_state.spd_selected * 100));
                 } else { // knot
-                    sprintf(display_str_buf, "%03d", (uint8_t)fcu_state.spd_selected);
+                    sprintf(display_str_buf, "%03d", (uint16_t)(fcu_state.spd_selected));
                 }
                 u8g2_DrawStr(&screen_left, SPD_H_POS, 32, display_str_buf);
             }
@@ -480,7 +483,11 @@ int main(void)
             }
 
             u8g2_SetFont(&screen_left, u8g2_font_finderskeepers_tr);
-            u8g2_DrawStr(&screen_left, SPD_H_POS, 7, "SPD");
+            if (fcu_state.spd_mach_mode) {
+                u8g2_DrawStr(&screen_left, SPD_H_POS + 20, 7, "MACH");
+            } else {
+                u8g2_DrawStr(&screen_left, SPD_H_POS, 7, "SPD");
+            }
             if (fcu_state.trk_fpa_mode) {
                 u8g2_DrawStr(&screen_left, HDG_H_POS + 14, 7, "TRK");
                 u8g2_DrawStr(&screen_left, 110, 9, "TRK");

@@ -32,33 +32,33 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 // Deserialization function
-static inline void deserialize(unsigned char *buffer, panel_state_t *panel)
-{
-    // Copy each byte from buffer into panel with proper byte order
-    panel->ap_master          = buffer[0] & 0x01;
-    panel->ap1_active         = (buffer[0] >> 1) & 0x01;
-    panel->ap2_active         = (buffer[0] >> 2) & 0x01;
-    panel->ap_throttle_active = (buffer[0] >> 3) & 0x01;
-    panel->loc_mode_active    = (buffer[0] >> 4) & 0x01;
-    panel->exped_mode_active  = (buffer[0] >> 5) & 0x01;
-    panel->appr_mode_active   = (buffer[0] >> 6) & 0x01;
-    panel->spd_mach_mode      = (buffer[0] >> 7) & 0x01;
-
-    panel->trk_fpa_mode  = buffer[1] & 0x01;
-    panel->spd_dashes    = (buffer[1] >> 1) & 0x01;
-    panel->spd_dot       = (buffer[1] >> 2) & 0x01;
-    panel->hdg_dashes    = (buffer[1] >> 3) & 0x01;
-    panel->hdg_dot       = (buffer[1] >> 4) & 0x01;
-    panel->alt_dot       = (buffer[1] >> 5) & 0x01;
-    panel->alt_increment = (buffer[1] >> 6) & 0x01;
-    panel->vs_dashes     = (buffer[1] >> 7) & 0x01;
-
-    panel->hdg_selected = buffer[2] | (buffer[3] << 8);        // low byte + high byte
-    memcpy(&(panel->spd_selected), buffer + 4, sizeof(float)); // copy float as is
-    panel->fpa_selected = buffer[8];                           // copy int8 as is
-    panel->vs_selected  = buffer[9];                           // copy int8 as is
-    panel->alt_selected = buffer[10] | (buffer[11] << 8);      // low byte + high byte
-}
+//static inline void deserialize(unsigned char *buffer, panel_state_t *panel)
+//{
+//    // Copy each byte from buffer into panel with proper byte order
+//    panel->ap_master          = buffer[0] & 0x01;
+//    panel->ap1_active         = (buffer[0] >> 1) & 0x01;
+//    panel->ap2_active         = (buffer[0] >> 2) & 0x01;
+//    panel->ap_throttle_active = (buffer[0] >> 3) & 0x01;
+//    panel->loc_mode_active    = (buffer[0] >> 4) & 0x01;
+//    panel->exped_mode_active  = (buffer[0] >> 5) & 0x01;
+//    panel->appr_mode_active   = (buffer[0] >> 6) & 0x01;
+//    panel->spd_mach_mode      = (buffer[0] >> 7) & 0x01;
+//
+//    panel->trk_fpa_mode  = buffer[1] & 0x01;
+//    panel->spd_dashes    = (buffer[1] >> 1) & 0x01;
+//    panel->spd_dot       = (buffer[1] >> 2) & 0x01;
+//    panel->hdg_dashes    = (buffer[1] >> 3) & 0x01;
+//    panel->hdg_dot       = (buffer[1] >> 4) & 0x01;
+//    panel->alt_dot       = (buffer[1] >> 5) & 0x01;
+//    panel->alt_increment = (buffer[1] >> 6) & 0x01;
+//    panel->vs_dashes     = (buffer[1] >> 7) & 0x01;
+//
+//    panel->hdg_selected = buffer[2] | (buffer[3] << 8);        // low byte + high byte
+//    memcpy(&(panel->spd_selected), buffer + 4, sizeof(float)); // copy float as is
+//    panel->fpa_selected = buffer[8];                           // copy int8 as is
+//    panel->vs_selected  = buffer[9];                           // copy int8 as is
+//    panel->alt_selected = buffer[10] | (buffer[11] << 8);      // low byte + high byte
+//}
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -261,8 +261,9 @@ static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state)
         printf("%02X", hhid->Report_buf[i]);
     }
     printf("\n");
-    //    memcpy(&fcu_state, hhid->Report_buf, sizeof(panel_state_t));
-    deserialize(hhid->Report_buf, &fcu_state);
+    memcpy(&fcu_state, hhid->Report_buf, sizeof(panel_state_t));
+    //    deserialize(hhid->Report_buf, &fcu_state);
+    fcu_update = 1;
     return (USBD_OK);
     /* USER CODE END 6 */
 }
