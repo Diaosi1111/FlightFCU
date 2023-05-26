@@ -31,7 +31,33 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+// Deserialization function
+static inline void deserialize(unsigned char* buffer, panel_state_t* panel) {
+    // Copy each byte from buffer into panel with proper byte order
+    panel->ap_master = buffer[0] & 0x01;
+    panel->ap1_active = (buffer[0] >> 1) & 0x01;
+    panel->ap2_active = (buffer[0] >> 2) & 0x01;
+    panel->ap_throttle_active = (buffer[0] >> 3) & 0x01;
+    panel->loc_mode_active = (buffer[0] >> 4) & 0x01;
+    panel->exped_mode_active = (buffer[0] >> 5) & 0x01;
+    panel->appr_mode_active = (buffer[0] >> 6) & 0x01;
+    panel->spd_mach_mode = (buffer[0] >> 7) & 0x01;
 
+    panel->trk_fpa_mode = buffer[1] & 0x01;
+    panel->spd_dashes = (buffer[1] >> 1) & 0x01;
+    panel->spd_dot = (buffer[1] >> 2) & 0x01;
+    panel->hdg_dashes = (buffer[1] >> 3) & 0x01;
+    panel->hdg_dot = (buffer[1] >> 4) & 0x01;
+    panel->alt_dot = (buffer[1] >> 5) & 0x01;
+    panel->alt_increment = (buffer[1] >> 6) & 0x01;
+    panel->vs_dashes = (buffer[1] >> 7) & 0x01;
+
+    panel->hdg_selected = buffer[2] | (buffer[3] << 8); // low byte + high byte
+    memcpy(&(panel->spd_selected), buffer + 4, sizeof(float)); // copy float as is
+    panel->fpa_selected = buffer[8]; // copy int8 as is
+    panel->vs_selected = buffer[9]; // copy int8 as is
+    panel->alt_selected = buffer[10] | (buffer[11] << 8); // low byte + high byte
+}
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -93,9 +119,10 @@ __ALIGN_BEGIN static uint8_t CUSTOM_HID_ReportDesc_FS[USBD_CUSTOM_HID_REPORT_DES
         /* USER CODE BEGIN 0 */
         /* 告诉PC我是桌面类的 */
         0x05, 0x01, // USAGE_PAGE (Generic Desktop)
-        /* 告诉PC我是干什么的，他也可以定义成鼠标或者键盘，具体根据自己需求*/
-        //                0x09, 0x04, // USAGE (Joystick)
-        0x09, 0x05, // USAGE (Game Pad)
+                    /* 告诉PC我是干什么的，他也可以定义成鼠标或者键盘，具体根据自己需求*/
+                    //                0x09, 0x04, // USAGE (Joystick)
+                    //        0x09, 0x05, // USAGE (Game Pad)
+        0x09, 0x00, // USAGE (Undefined)
 
         /* 他告诉PC端我的物理逻辑，我们属于输入设备，以外部物理逻辑判断我们的行为再向PC端输入 */
         0xa1, 0x01, // COLLECTION (Application)
@@ -117,17 +144,17 @@ __ALIGN_BEGIN static uint8_t CUSTOM_HID_ReportDesc_FS[USBD_CUSTOM_HID_REPORT_DES
         /*需要接受的数据*/
         /* Byte0: LED亮灭 AP_Master AP1 AP2 A/THR LOC EXPED APPR   ALT_INC(0为100 1为1000) */
         /* Byte1: OLED显示类型 SPD_DASHES SPD_DOT SPD_MACH HDG_DASHES HDG_DOT ALT_DOT VS_DASHES TRK_FPA */
+        /* Byte6: OLED显示数据 HDG_SELECTED(int16_t) */
+        /* Byte7: OLED显示数据 HDG_SELECTED(int16_t) */
         /* Byte2: OLED显示数据 SPD_SELECTED(float) */
         /* Byte3: OLED显示数据 SPD_SELECTED(float) */
         /* Byte4: OLED显示数据 SPD_SELECTED(float) */
         /* Byte5: OLED显示数据 SPD_SELECTED(float) */
-        /* Byte6: OLED显示数据 HDG_SELECTED(int16_t) */
-        /* Byte7: OLED显示数据 HDG_SELECTED(int16_t) */
         /* Byte8: OLED显示数据 FPA_SELECTED(int8_t) */
         /* Byte9: OLED显示数据 VS_SELECTED(1%)(int8_t) */
         /* Byte10: OLED显示数据 ALT_SELECTED(uint16_t) */
         /* Byte11: OLED显示数据 ALT_SELECTED(uint16_t) */
-        0x09, 0x04,                  //   USAGE (Undefined)
+        0x09, 0x00,                  //   USAGE (Undefined)
         0x15, 0x00,                  //   LOGICAL_MINIMUM (0)
         0x26, 0xff, 0x00,            //   LOGICAL_MAXIMUM (255)
         0x75, 0x08,                  //   REPORT_SIZE (8)
@@ -221,6 +248,21 @@ static int8_t CUSTOM_HID_DeInit_FS(void)
 static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state)
 {
     /* USER CODE BEGIN 6 */
+    /*查看接收数据长度*/
+    //    USB_Received_Count = USBD_GetRxCount(&hUsbDeviceFS, CUSTOM_HID_EPOUT_ADDR); // 第一参数是USB句柄，第二个参数的是接收的末端地址；要获取发送的数据长度的话就把第二个参数改为发送末端地址即可
+    // printf("USB_Received_Count = %d \r\n",USB_Received_Count);
+    extern panel_state_t fcu_state;
+    extern uint8_t fcu_update;
+    USBD_CUSTOM_HID_HandleTypeDef *hhid;                             // 定义一个指向USBD_CUSTOM_HID_HandleTypeDef结构体的指针
+    hhid = (USBD_CUSTOM_HID_HandleTypeDef *)hUsbDeviceFS.pClassData; // 得到USB接收数据的储存地址
+    printf("RECEIVE DATA:");
+    for (uint8_t i = 0; i < 12; i++) {
+        printf("%02X", hhid->Report_buf[i]);
+    }
+    printf("\n");
+
+//    memcpy(&fcu_state, hhid->Report_buf, sizeof(panel_state_t));
+    deserialize(hhid->Report_buf,&fcu_state);
     return (USBD_OK);
     /* USER CODE END 6 */
 }

@@ -104,7 +104,7 @@ uint8_t __io_putchar(int ch)
 }
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
-static int8_t USBD_CUSTOM_HID_SendReport_FS(uint8_t *report, uint16_t len)
+static inline int8_t USBD_CUSTOM_HID_SendReport_FS(uint8_t *report, uint16_t len)
 {
     return USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS, report, len);
 }
@@ -114,35 +114,6 @@ static int8_t USBD_CUSTOM_HID_SendReport_FS(uint8_t *report, uint16_t len)
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 /* 使用状态机来完成数据维护 */
-typedef struct FCU_Panel_State {
-
-    struct {
-        uint16_t ap_master : 1;
-        uint16_t ap1_active : 1;
-        uint16_t ap2_active : 1;
-        uint16_t ap_throttle_active : 1;
-        uint16_t loc_mode_active : 1;
-        uint16_t exped_mode_active : 1;
-        uint16_t appr_mode_active : 1;
-        uint16_t spd_mach_mode : 1;
-        uint16_t trk_fpa_mode : 1;
-        uint16_t metric_mode : 1;
-
-        uint16_t spd_dashes : 1;
-        uint16_t spd_dot : 1;
-        uint16_t hdg_dashes : 1;
-        uint16_t hdg_dot : 1;
-        uint16_t alt_dot : 1;
-        uint16_t alt_increment : 1; // 0|1=>100|1000
-        uint16_t vs_dashes : 1;
-    };
-    float spd_selected;
-    uint16_t hdg_selected;
-    int8_t fpa_selected;
-    int8_t vs_selected;
-    uint16_t alt_selected;
-} panel_state_t;
-
 panel_state_t fcu_state = {0};
 
 char display_str_buf[6];
@@ -182,11 +153,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         if (spd_flag && alv) {
             spd_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (spd_cw1 && spd_cw2) {
-                //                usb_send_buf |= 1 << ALT_A_SFB;
+                usb_send_buf |= 1 << SPD_A_SFB;
                 fcu_state.spd_selected += 1;
             }
             if (spd_cw1 == 0 && spd_cw2 == 0) {
-                //                usb_send_buf |= 1 << ALT_B_SFB;
+                usb_send_buf |= 1 << SPD_B_SFB;
                 fcu_state.spd_selected -= 1;
             }
             spd_flag = 0;
@@ -194,7 +165,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     } else if (GPIO_Pin == HDG_A_Pin) {
         alv = HAL_GPIO_ReadPin(HDG_A_GPIO_Port, HDG_A_Pin);
         blv = HAL_GPIO_ReadPin(HDG_B_GPIO_Port, HDG_B_Pin);
-        //        printf("alv:%d blv:%d\n", alv, blv);
         if (hdg_flag == 0 && alv == 0) {
             hdg_cw1  = blv;
             hdg_flag = 1;
@@ -202,9 +172,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         if (hdg_flag && alv) {
             hdg_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (hdg_cw1 && hdg_cw2) {
+                usb_send_buf |= 1 << HDG_A_SFB;
                 fcu_state.hdg_selected += 1;
             }
             if (hdg_cw1 == 0 && hdg_cw2 == 0) {
+                usb_send_buf |= 1 << HDG_B_SFB;
                 fcu_state.hdg_selected -= 1;
             }
             hdg_flag = 0;
@@ -219,10 +191,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         if (alt_flag && alv) {
             alt_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (alt_cw1 && alt_cw2) {
-                fcu_state.alt_selected += fcu_state.alt_increment == 0 ? 100 : 1000;
+                usb_send_buf |= 1 << ALT_A_SFB;
+                fcu_state.alt_selected += fcu_state.alt_increment == 0 ? 1 : 1000;
             }
             if (alt_cw1 == 0 && alt_cw2 == 0) {
-                fcu_state.alt_selected -= fcu_state.alt_increment == 0 ? 100 : 1000;
+                usb_send_buf |= 1 << ALT_B_SFB;
+                fcu_state.alt_selected -= fcu_state.alt_increment == 0 ? 1 : 1000;
             }
             alt_flag = 0;
         }
@@ -237,11 +211,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         if (vs_flag && alv) {
             vs_cw2 = 1 - blv; // 取反是因为 alv,blv必然异步，一高一低。
             if (vs_cw1 && vs_cw2) {
-                //                usb_send_buf |= 1 << ALT_A_SFB;
+                usb_send_buf |= 1 << VS_A_SFB;
                 fcu_state.vs_selected += 1;
             }
             if (vs_cw1 == 0 && vs_cw2 == 0) {
-                //                usb_send_buf |= 1 << ALT_B_SFB;
+                usb_send_buf |= 1 << VS_B_SFB;
                 fcu_state.vs_selected -= 1;
             }
             vs_flag = 0;
@@ -469,93 +443,102 @@ int main(void)
             key = bsp_key_dequeue();
         }
         /* --------------------- USB 数据发送 ----------------------- */
-
+        USBD_CUSTOM_HID_SendReport_FS((uint8_t *)&usb_send_buf, sizeof(usb_send_buf));
+        //        printf("Send Report:%lX\n", usb_send_buf);
+        usb_send_buf = 0;
         /* --------------------- USB 数据接收 ----------------------- */
 
         /* ----------------------- LED刷新 ------------------------- */
         panel_led_update(&fcu_state);
-        //        fcu_state.trk_fpa_mode=1-fcu_state.trk_fpa_mode;
         /* ----------------------- 显示刷新 ------------------------- */
-        //        if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) { // USB 已连接
-        /* Left Screen */
-        u8g2_ClearBuffer(&screen_left);
+        if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) { // USB 已连接
+            /* Left Screen */
+            u8g2_ClearBuffer(&screen_left);
 
-        u8g2_SetFont(&screen_left, digital7_24);
-        /* SPD */
-        if (fcu_state.spd_dashes) {
-            u8g2_DrawStr(&screen_left, SPD_H_POS, 32, "---");
-        } else {
-            if (fcu_state.spd_mach_mode) { // mach
-                sprintf(display_str_buf, "%0.2f", fcu_state.spd_selected);
-            } else { // knot
-                sprintf(display_str_buf, "%03d", (uint8_t)fcu_state.spd_selected);
+            u8g2_SetFont(&screen_left, digital7_24);
+            /* SPD */
+            if (fcu_state.spd_dashes) {
+                u8g2_DrawStr(&screen_left, SPD_H_POS, 32, "---");
+            } else {
+                if (fcu_state.spd_mach_mode) { // mach
+                    sprintf(display_str_buf, "%0.2f", fcu_state.spd_selected);
+                } else { // knot
+                    sprintf(display_str_buf, "%03d", (uint8_t)fcu_state.spd_selected);
+                }
+                u8g2_DrawStr(&screen_left, SPD_H_POS, 32, display_str_buf);
             }
-            u8g2_DrawStr(&screen_left, SPD_H_POS, 32, display_str_buf);
-        }
-        if (fcu_state.spd_dot) { u8g2_DrawFilledEllipse(&screen_left, SPD_H_POS + 40, 23, 4, 4, U8G2_DRAW_ALL); }
-        /* HDG */
-        if (fcu_state.hdg_dashes) {
-            u8g2_DrawStr(&screen_left, HDG_H_POS, 32, "---");
-        } else {
-            sprintf(display_str_buf, "%03d", (uint8_t)fcu_state.hdg_selected);
-            u8g2_DrawStr(&screen_left, HDG_H_POS, 32, display_str_buf);
-        }
-        if (fcu_state.hdg_dot) {
-            u8g2_DrawFilledEllipse(&screen_left, HDG_H_POS + 42, 23, 4, 4, U8G2_DRAW_ALL);
-        }
-
-        u8g2_SetFont(&screen_left, u8g2_font_finderskeepers_tr);
-        u8g2_DrawStr(&screen_left, SPD_H_POS, 7, "SPD");
-        if (fcu_state.trk_fpa_mode) {
-            u8g2_DrawStr(&screen_left, HDG_H_POS + 14, 7, "TRK");
-            u8g2_DrawStr(&screen_left, 110, 9, "TRK");
-            u8g2_DrawStr(&screen_left, 110, 26, "FPA");
-        } else {
-            u8g2_DrawStr(&screen_left, HDG_H_POS, 7, "HDG");
-            u8g2_DrawStr(&screen_left, 110, 9, "HDG");
-            u8g2_DrawStr(&screen_left, 110, 26, "V/S");
-        }
-        u8g2_DrawStr(&screen_left, HDG_H_POS + 34, 7, "LAT");
-
-        u8g2_SendBuffer(&screen_left);
-        /* ------- Right Screen --------- */
-        u8g2_ClearBuffer(&screen_right);
-
-        u8g2_SetFont(&screen_right, digital7_24);
-        sprintf(display_str_buf, "%05d", fcu_state.alt_selected);
-        u8g2_DrawStr(&screen_right, ALT_H_POS, 32, display_str_buf);
-        if (fcu_state.vs_dashes) {
-            u8g2_DrawStr(&screen_right, VS_H_POS, 32, "-----");
-        } else {
-            if (fcu_state.trk_fpa_mode) {                                          // FPA
-                sprintf(display_str_buf, "%+1.1f", fcu_state.fpa_selected / 10.0); // 无需补零
-                u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
-            } else {                                                      // V/S
-                sprintf(display_str_buf, "%+03d", fcu_state.vs_selected); // 无需补零
-                u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
-                u8g2_SetFont(&screen_right, digital7_18);
-                u8g2_DrawStr(&screen_right, VS_H_POS + 34, 32, "00");
+            if (fcu_state.spd_dot) { u8g2_DrawFilledEllipse(&screen_left, SPD_H_POS + 40, 23, 4, 4, U8G2_DRAW_ALL); }
+            /* HDG */
+            if (fcu_state.hdg_dashes) {
+                u8g2_DrawStr(&screen_left, HDG_H_POS, 32, "---");
+            } else {
+                sprintf(display_str_buf, "%03d", (uint8_t)fcu_state.hdg_selected);
+                u8g2_DrawStr(&screen_left, HDG_H_POS, 32, display_str_buf);
             }
-        }
-        if (fcu_state.alt_dot) { u8g2_DrawFilledEllipse(&screen_right, 63, 23, 5, 5, U8G2_DRAW_ALL); }
+            if (fcu_state.hdg_dot) {
+                u8g2_DrawFilledEllipse(&screen_left, HDG_H_POS + 42, 23, 4, 4, U8G2_DRAW_ALL);
+            }
 
-        u8g2_SetFont(&screen_right, u8g2_font_finderskeepers_tr);
-        u8g2_DrawStr(&screen_right, ALT_H_POS + 18, 7, "ALT");
-        u8g2_DrawStr(&screen_right, ALT_H_POS + 48, 7, "LVL/CH");
-        if (fcu_state.trk_fpa_mode) {
-            u8g2_DrawStr(&screen_right, VS_H_POS + 40, 7, "FPA");
+            u8g2_SetFont(&screen_left, u8g2_font_finderskeepers_tr);
+            u8g2_DrawStr(&screen_left, SPD_H_POS, 7, "SPD");
+            if (fcu_state.trk_fpa_mode) {
+                u8g2_DrawStr(&screen_left, HDG_H_POS + 14, 7, "TRK");
+                u8g2_DrawStr(&screen_left, 110, 9, "TRK");
+                u8g2_DrawStr(&screen_left, 110, 26, "FPA");
+            } else {
+                u8g2_DrawStr(&screen_left, HDG_H_POS, 7, "HDG");
+                u8g2_DrawStr(&screen_left, 110, 9, "HDG");
+                u8g2_DrawStr(&screen_left, 110, 26, "V/S");
+            }
+            u8g2_DrawStr(&screen_left, HDG_H_POS + 34, 7, "LAT");
+
+            u8g2_SendBuffer(&screen_left);
+            /* ------- Right Screen --------- */
+            u8g2_ClearBuffer(&screen_right);
+
+            u8g2_SetFont(&screen_right, digital7_24);
+            sprintf(display_str_buf, "%05d", fcu_state.alt_selected);
+            u8g2_DrawStr(&screen_right, ALT_H_POS, 32, display_str_buf);
+            if (fcu_state.vs_dashes) {
+                u8g2_DrawStr(&screen_right, VS_H_POS, 32, "-----");
+            } else {
+                if (fcu_state.trk_fpa_mode) {                                          // FPA
+                    sprintf(display_str_buf, "%+1.1f", fcu_state.fpa_selected / 10.0); // 无需补零
+                    u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
+                } else {                                                      // V/S
+                    sprintf(display_str_buf, "%+03d", fcu_state.vs_selected); // 无需补零
+                    u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
+                    u8g2_SetFont(&screen_right, digital7_18);
+                    u8g2_DrawStr(&screen_right, VS_H_POS + 34, 32, "00");
+                }
+            }
+            if (fcu_state.alt_dot) { u8g2_DrawFilledEllipse(&screen_right, 63, 23, 5, 5, U8G2_DRAW_ALL); }
+
+            u8g2_SetFont(&screen_right, u8g2_font_finderskeepers_tr);
+            u8g2_DrawStr(&screen_right, ALT_H_POS + 18, 7, "ALT");
+            u8g2_DrawStr(&screen_right, ALT_H_POS + 48, 7, "LVL/CH");
+            if (fcu_state.trk_fpa_mode) {
+                u8g2_DrawStr(&screen_right, VS_H_POS + 40, 7, "FPA");
+            } else {
+                u8g2_DrawStr(&screen_right, VS_H_POS + 24, 7, "V/S");
+            }
+            u8g2_DrawVLine(&screen_right, ALT_H_POS + 36, 3, 4);
+            u8g2_DrawHLine(&screen_right, ALT_H_POS + 36, 3, 10);
+            u8g2_DrawVLine(&screen_right, VS_H_POS + 20, 3, 4);
+            u8g2_DrawHLine(&screen_right, VS_H_POS + 10, 3, 10);
+
+            u8g2_SendBuffer(&screen_right);
         } else {
-            u8g2_DrawStr(&screen_right, VS_H_POS + 24, 7, "V/S");
-        }
-        u8g2_DrawVLine(&screen_right, ALT_H_POS + 36, 3, 4);
-        u8g2_DrawHLine(&screen_right, ALT_H_POS + 36, 3, 10);
-        u8g2_DrawVLine(&screen_right, VS_H_POS + 20, 3, 4);
-        u8g2_DrawHLine(&screen_right, VS_H_POS + 10, 3, 10);
+            u8g2_SetFont(&screen_right, u8g2_font_crox4h_tr);
+            u8g2_ClearBuffer(&screen_right);
+            u8g2_DrawStr(&screen_right, 0, 28, "USB Connect.");
+            u8g2_SendBuffer(&screen_right);
 
-        u8g2_SendBuffer(&screen_right);
-        //        }
-        //        else{
-        //        }
+            u8g2_SetFont(&screen_left, u8g2_font_crox4h_tr);
+            u8g2_ClearBuffer(&screen_left);
+            u8g2_DrawStr(&screen_left, 20, 28, "Waiting For");
+            u8g2_SendBuffer(&screen_left);
+        }
     }
     /* USER CODE END 3 */
 }
