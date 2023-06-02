@@ -223,6 +223,34 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         }
     }
 }
+// 无返回值的函数
+void float2Str(char *str, float value)
+{
+    //    int Head = (int)value;
+    //    int Point;
+    //    if (value < 0) {
+    //        Point = (int)((value + (float)Head) * 10.0f - 0.6);
+    //        Point = -Point;
+    //    } else {
+    //        Point = (int)((value - (float)Head) * 10.0f);
+    //    }
+    //    if (Head == 0 && value < 0) {
+    //        sprintf(str, "-%d.%d", Head, Point);
+    //    } else {
+    //        sprintf(str, "+%d.%d", Head, Point);
+    //    }
+    char sign;
+    if (value >= 0) {
+        sign = '+';
+    } else {
+        sign  = '-';
+        value = -value;
+    }
+    int integer = (int)value; // 将浮点数转换为整数
+    float decimalPart = value - integer;                                                                         // 提取小数部分
+    int decimalDigits = (decimalPart * 10 >= 0) ? (int)(decimalPart * 10 + 0.5) : (int)(decimalPart * 10 - 0.5); // 提取小数位数
+    sprintf(str, "%c%d.%d\n", sign, integer, decimalDigits); // 打印结果
+}
 /* USER CODE END 0 */
 
 /**
@@ -509,8 +537,12 @@ int main(void)
             if (fcu_state.vs_dashes) {
                 u8g2_DrawStr(&screen_right, VS_H_POS, 32, "-----");
             } else {
-                if (fcu_state.trk_fpa_mode) {                                          // FPA
-                    sprintf(display_str_buf, "%+1.1f", fcu_state.fpa_selected / 10.0); // 无需补零
+                if (fcu_state.trk_fpa_mode) { // FPA
+                                              //                    float f_tmp = fcu_state.fpa_selected / 10.0f;
+                    float2Str(display_str_buf, fcu_state.fpa_selected / 10.0f);
+                    //                                        sprintf(display_str_buf, "%+1.1f", fcu_state.fpa_selected / 10.0f); // 无需补零
+                    //                    printf("%s\n", display_str_buf);
+                    //                                        printf("%f\n", fcu_state.fpa_selected / 10.0f);
                     u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
                 } else {                                                      // V/S
                     sprintf(display_str_buf, "%+03d", fcu_state.vs_selected); // 无需补零
