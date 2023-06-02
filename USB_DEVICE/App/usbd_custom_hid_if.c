@@ -32,7 +32,7 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 // Deserialization function
-//static inline void deserialize(unsigned char *buffer, panel_state_t *panel)
+// static inline void deserialize(unsigned char *buffer, panel_state_t *panel)
 //{
 //    // Copy each byte from buffer into panel with proper byte order
 //    panel->ap_master          = buffer[0] & 0x01;
@@ -256,11 +256,13 @@ static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state)
     extern uint8_t fcu_update;
     USBD_CUSTOM_HID_HandleTypeDef *hhid;                             // 定义一个指向USBD_CUSTOM_HID_HandleTypeDef结构体的指针
     hhid = (USBD_CUSTOM_HID_HandleTypeDef *)hUsbDeviceFS.pClassData; // 得到USB接收数据的储存地址
-    printf("RECEIVE DATA:");
-    for (uint8_t i = 0; i < 12; i++) {
-        printf("%02X", hhid->Report_buf[i]);
-    }
-    printf("\n");
+
+                                                                     //    printf("RECEIVE DATA:");
+                                                                     //    for (uint8_t i = 0; i < 12; i++) {
+                                                                     //        printf("%02X", hhid->Report_buf[i]);
+                                                                     //    }
+                                                                     //    printf("\n");
+
     memcpy(&fcu_state, hhid->Report_buf, sizeof(panel_state_t));
     //    deserialize(hhid->Report_buf, &fcu_state);
     fcu_update = 1;
