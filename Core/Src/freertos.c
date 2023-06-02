@@ -46,6 +46,8 @@
 #define ALT_H_POS             0
 #define VS_H_POS              72
 
+#define USE_USB_PAGE          1
+
 #define KEY_DEBUG_PRINTF(...) printf(__VA_ARGS__)
 /* USER CODE END PD */
 
@@ -203,6 +205,21 @@ static inline void panel_led_update(panel_state_t *panel)
     HAL_GPIO_WritePin(EXPED_LED_GPIO_Port, EXPED_LED_Pin, panel->exped_mode_active);
     HAL_GPIO_WritePin(APPR_LED_GPIO_Port, APPR_LED_Pin, panel->appr_mode_active);
 }
+// 无返回值的函数
+void float2Str(char *str, float value)
+{
+    static char sign;
+    if (value >= 0) {
+        sign = '+';
+    } else {
+        sign  = '-';
+        value = -value;
+    }
+    int integer       = (int)value;                                                                              // 将浮点数转换为整数
+    float decimalPart = value - (float)integer;                                                                  // 提取小数部分
+    int decimalDigits = (decimalPart * 10 >= 0) ? (int)(decimalPart * 10 + 0.5) : (int)(decimalPart * 10 - 0.5); // 提取小数位数
+    sprintf(str, "%c%d.%d\n", sign, integer, decimalDigits);                                                     // 打印结果
+}
 void StartDisplayTask(void *argument)
 {
     char display_str_buf[6];
@@ -212,7 +229,7 @@ void StartDisplayTask(void *argument)
     extern const uint8_t digital7_24[1690] U8G2_FONT_SECTION("digital7_24");
     /* Infinite loop */
     for (;;) {
-#ifdef USB_PAGE
+#if USE_USB_PAGE
         if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) { // USB 已连接
             if (fcu_update == 0) continue;
             fcu_update = 0;
@@ -240,7 +257,7 @@ void StartDisplayTask(void *argument)
             if (fcu_state.hdg_dashes) {
                 u8g2_DrawStr(&screen_left, HDG_H_POS, 32, "---");
             } else {
-                sprintf(display_str_buf, "%03d", (uint16_t)fcu_state.hdg_selected);
+                sprintf(display_str_buf, "%03d", fcu_state.hdg_selected);
                 u8g2_DrawStr(&screen_left, HDG_H_POS, 32, display_str_buf);
             }
             if (fcu_state.hdg_dot) {
@@ -274,8 +291,8 @@ void StartDisplayTask(void *argument)
             if (fcu_state.vs_dashes) {
                 u8g2_DrawStr(&screen_right, VS_H_POS, 32, "-----");
             } else {
-                if (fcu_state.trk_fpa_mode) {                                          // FPA
-                    sprintf(display_str_buf, "%+1.1f", fcu_state.fpa_selected / 10.0); // 无需补零
+                if (fcu_state.trk_fpa_mode) { // FPA
+                    float2Str(display_str_buf, (float)fcu_state.fpa_selected / 10.0f);
                     u8g2_DrawStr(&screen_right, VS_H_POS, 32, display_str_buf);
                 } else {                                                      // V/S
                     sprintf(display_str_buf, "%+03d", fcu_state.vs_selected); // 无需补零
@@ -300,7 +317,7 @@ void StartDisplayTask(void *argument)
             u8g2_DrawHLine(&screen_right, VS_H_POS + 10, 3, 10);
 
             u8g2_SendBuffer(&screen_right);
-#ifdef USB_PAGE
+#ifdef USE_USB_PAGE
         } else {
             u8g2_SetFont(&screen_right, u8g2_font_crox4h_tr);
             u8g2_ClearBuffer(&screen_right);
@@ -376,6 +393,8 @@ void StartKeyScanTask(void *argument)
                     KEY_DEBUG_PRINTF("KEY_METRIC_UP\n");
                     break;
                 case KEY_METRIC_LONG:
+                    usb_send_buf |= 1 << METRIC_LONG_ALT_INC_TOGGLE_SFB;
+                    usb_send_buf ^= 1 << METRIC_PUSH_SFB;
                     KEY_DEBUG_PRINTF("KEY_METRIC_LONG\n");
                     break;
 
@@ -490,8 +509,8 @@ void StartAutopilotBeepTask(void *argument)
 }
 void StartUSBTransmitTask(void *argument)
 {
-    while (usb_inited != 1)
-        osDelay(100);
+    //    while (usb_inited != 1)
+    //        osDelay(100);
     /* Infinite loop */
     static uint32_t start_ticks = 0;
     for (;;) {
